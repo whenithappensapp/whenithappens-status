@@ -1,0 +1,39 @@
+name: Update status.json timestamp
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: status-json
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update status.json updated_at
+        run: |
+          python3 - <<'PY'
+          import json, datetime, pathlib
+          p = pathlib.Path("status.json")
+          data = json.loads(p.read_text(encoding="utf-8"))
+          # Preserve "happened" value; refresh timestamp every run
+          data["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z")
+          p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Commit and push (even if only timestamp changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add status.json
+          git commit -m "Update status.json timestamp" || exit 0
+          git push
